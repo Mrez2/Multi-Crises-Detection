@@ -1,0 +1,11 @@
+path: C:/games/Emergencies
+
+train: dataset/train/images
+val: dataset/val/images
+test: dataset/test/images
+
+names:
+  0: smoke
+  1: fire
+
+nc: 2
