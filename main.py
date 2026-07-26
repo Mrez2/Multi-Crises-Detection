@@ -1,146 +1,151 @@
 from ultralytics import YOLO
-from danger_analyzer import DangerAnalyzer
 import cv2
+
+from danger_analyzer import DangerAnalyzer
 
 
 # Load Models
 
 
-fire_model = YOLO(r"C:\games\Emergencies\runs\detect\train-6\weights\best.pt")
-human_model = YOLO("yolov8n.pt")
+fire_model = YOLO(r"C:\games\Emergencies\runs\detect\train-6\weights\best.pt")   # Change to your model path
+person_model = YOLO("yolov8n.pt")                 # COCO model
 
-analyzer = DangerAnalyzer()
-
-
-# Read Image
+danger = DangerAnalyzer()
 
 
-image_path = r"C:\games\Emergencies\dataset\test\images\LDN-L-FILM-FIRESAFETY-1108-01-SR-1.webp"      # Change to your image
-
-image = cv2.imread(image_path)
-
-if image is None:
-    print("Image not found!")
-    exit()
-
-annotated = image.copy()
+# Detection Function
 
 
-# Fire & Smoke Detection
+def process_frame(frame):
 
+    fire_results = fire_model(frame, conf=0.35, verbose=False)
+    person_results = person_model(frame, classes=[0], conf=0.40, verbose=False)
 
-fire_results = fire_model(image, conf=0.30)
+    annotated = frame.copy()
 
-fire_count = 0
-smoke_count = 0
+    # Draw fire/smoke detections
+    annotated = fire_results[0].plot(img=annotated)
 
-for box in fire_results[0].boxes:
+    fire_count = 0
+    smoke_count = 0
 
-    cls = int(box.cls[0])
+    for box in fire_results[0].boxes:
 
-    x1, y1, x2, y2 = map(int, box.xyxy[0])
+        cls = int(box.cls[0])
 
-    if cls == 0:
-        smoke_count += 1
-        color = (0,255,255)
-        label = "Smoke"
+        if cls == 0:
+            smoke_count += 1
 
-    else:
-        fire_count += 1
-        color = (0,0,255)
-        label = "Fire"
+        elif cls == 1:
+            fire_count += 1
 
-    cv2.rectangle(annotated,(x1,y1),(x2,y2),color,2)
+    # Draw people
+    people_count = 0
 
-    cv2.putText(
-        annotated,
-        label,
-        (x1,y1-10),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.6,
-        color,
-        2
+    for box in person_results[0].boxes:
+
+        people_count += 1
+
+        x1, y1, x2, y2 = map(int, box.xyxy[0])
+
+        cv2.rectangle(annotated,
+                      (x1, y1),
+                      (x2, y2),
+                      (0,255,0),
+                      2)
+
+        cv2.putText(annotated,
+                    "Person",
+                    (x1, y1-10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (0,255,0),
+                    2)
+
+    level, color = danger.analyze(
+        fire_count,
+        smoke_count,
+        people_count
     )
 
-
-# Human Detection
-
-
-human_results = human_model(image, conf=0.40)
-
-people_count = 0
-
-for box in human_results[0].boxes:
-
-    cls = int(box.cls[0])
-
-    # COCO class 0 = person
-    if cls != 0:
-        continue
-
-    people_count += 1
-
-    x1,y1,x2,y2 = map(int, box.xyxy[0])
-
-    cv2.rectangle(
+    annotated = danger.draw_panel(
         annotated,
-        (x1,y1),
-        (x2,y2),
-        (0,255,0),
-        2
+        fire_count,
+        smoke_count,
+        people_count,
+        level,
+        color
     )
 
-    cv2.putText(
-        annotated,
-        "Person",
-        (x1,y1-10),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.6,
-        (0,255,0),
-        2
-    )
+    return annotated
 
 
-# Danger Analysis
+# Image Mode
 
 
-level, color = analyzer.analyze(
-    fire_count,
-    smoke_count,
-    people_count
-)
+def image_mode():
 
-annotated = analyzer.draw_panel(
-    annotated,
-    fire_count,
-    smoke_count,
-    people_count,
-    level,
-    color
-)
+    image_path = input("Image path: ")
 
+    image = cv2.imread(image_path)
 
-# Extra Warning
+    if image is None:
+        print("Image not found.")
+        return
 
+    result = process_frame(image)
 
-if fire_count > 0 or smoke_count > 0:
+    cv2.imshow("Smart Building Monitor", result)
 
-    cv2.putText(
-        annotated,
-        "DANGER DETECTED!",
-        (30,230),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1,
-        (0,0,255),
-        3
-    )
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 
-# Show Image
+# Camera Mode
 
 
-cv2.imshow("Smart Building Monitoring System", annotated)
+def camera_mode():
 
-cv2.waitKey(0)
+    cap = cv2.VideoCapture(0)
 
-cv2.destroyAllWindows()
+    if not cap.isOpened():
+        print("Camera not found.")
+        return
+
+    while True:
+
+        ret, frame = cap.read()
+
+        if not ret:
+            break
+
+        result = process_frame(frame)
+
+        cv2.imshow("Smart Building Monitor", result)
+
+        key = cv2.waitKey(1)
+
+        if key == ord("q"):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+# Main Menu
+
+
+print(" SMART BUILDING SYSTEM")
+print("1 - Test Image")
+print("2 - Live Camera")
+
+choice = input("Choose mode: ")
+
+if choice == "1":
+    image_mode()
+
+elif choice == "2":
+    camera_mode()
+
+else:
+    print("Invalid choice.")
