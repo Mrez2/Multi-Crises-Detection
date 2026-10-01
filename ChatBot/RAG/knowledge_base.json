@@ -1,0 +1,27 @@
+[
+  {
+    "id": "fire_safety_protocol",
+    "category": "fire",
+    "content": "In case of fire: Alert nearby occupants immediately. Do NOT use elevators; use emergency exits and stairwells only. Pull the nearest manual fire alarm. If smoke is heavy, stay low to the floor and cover your nose and mouth with a wet cloth."
+  },
+  {
+    "id": "evacuation_routes",
+    "category": "evacuation",
+    "content": "Evacuation Routes: Primary exit is Main Emergency Gate A on the ground floor. Secondary exit is West Wing Gate B. Follow the green illuminated EXIT signs. Keep corridors clear of all obstructions."
+  },
+  {
+    "id": "smoke_inhalation_first_aid",
+    "category": "first_aid",
+    "content": "Smoke Inhalation Response: Move the affected person to an open area with fresh air immediately. Keep them warm and rested. If unconscious or struggling to breathe, call emergency medical services immediately."
+  },
+  {
+    "id": "system_emergency_response",
+    "category": "system",
+    "content": "MACMS Automation: When a HIGH or CRITICAL risk level is detected, the system automatically unlocks main exit gates, triggers audio-visual alarms, and dispatches real-time alerts via Telegram and Firebase FCM."
+  },
+  {
+    "id": "assembly_point",
+    "category": "evacuation",
+    "content": "Assembly Point: The designated safe assembly area is the Main Outdoor Parking Lot, located 50 meters away from Main Gate A."
+  }
+]

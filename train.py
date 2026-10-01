@@ -1,17 +1,18 @@
+import torch
 from ultralytics import YOLO
 
 def main():
     model = YOLO("yolov8s.pt")
 
     model.train(
-        data="data.yaml",
-        epochs=50,
+        data="Data/data.yaml",
+        epochs=20,
         imgsz=640,
-        batch=16,
-        workers=8,
+        batch=8,
+        workers=2,
         cache=True,
         amp=True,
-        device=0
+        device= "cpu",
     )
 
 if __name__ == "__main__":

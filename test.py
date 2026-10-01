@@ -5,7 +5,7 @@ import os
 # ==============================
 # Load trained model
 # ==============================
-model = YOLO(r"C:\games\Emergencies\runs\detect\train-6\weights\best.pt")
+model = YOLO("best.pt")
 
 # ==============================
 # Read image
