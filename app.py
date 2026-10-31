@@ -1,70 +1,104 @@
 import os
 import requests
-from flask import Flask, render_template, request, jsonify
+import webbrowser
+import threading
+from flask import Flask, request, jsonify, send_from_directory
+from ChatBot.Chatbot_Core.response_generator import build_ai_prompt
 
 app = Flask(__name__)
 
-# --- 1. الصفحة الرئيسية للواجهة ---
-@app.route('/')
+
+# =========================
+# الصفحة الرئيسية
+# =========================
+
+@app.route("/")
 def home():
-    return render_template('index.html')
-
-# --- 2. مسار معالجة محادثات الشات بوت ---
-@app.route('/chat', methods=['POST'])
-def chat():
     try:
-        data = request.get_json() or {}
-        user_message = data.get("message", "").strip()
+        return send_from_directory("templates", "index.html")
+    except Exception:
+        return send_from_directory(".", "index.html")
 
-        if not user_message:
-            return jsonify({"response": "Please enter a message.", "reply": "Please enter a message."}), 400
 
-        # قراءة القراءات الحية من الكاميرا
-        camera_status = "System normal. No active hazard data."
-        if os.path.exists("system_status.txt"):
-            try:
-                with open("system_status.txt", "r", encoding="utf-8") as f:
-                    content = f.read().strip()
-                    if content:
-                        camera_status = content
-            except Exception as e:
-                print(f"[⚠️ Warning] Could not read status file: {e}")
+# =========================
+# محادثة الشات بوت
+# =========================
 
-        # حقن سياق بيانات الكاميرا في السؤال
-        enhanced_prompt = f"""You are the MACMS Smart Building Assistant. Answer the user strictly using the live camera detection data provided below. Do NOT hallucinate room numbers, percentages, or unverified threats.
+@app.route("/chat", methods=["POST"])
+def chat():
+    data = request.get_json() or {}
+    user_message = data.get("message", "").strip()
 
-[LIVE CAMERA DATA]: {camera_status}
+    if not user_message:
+        return jsonify({"response": "Please enter a message."})
 
-[USER QUESTION]: {user_message}"""
+    # بناء السياق
+    base_prompt = build_ai_prompt(user_message)
 
-        # إعداد الطلب إلى Ollama (تأكدي من مطابقة اسم الموديل لما هو محمل لديك)
-        payload = {
-            "model": "qwen3:8b",  # استبدليه بـ llama3 أو qwen2 إذا كنتِ تستخدمين موديل آخر
-            "messages": [
-                {"role": "user", "content": enhanced_prompt}
-            ],
-            "stream": False
+    # توجيه صارم يمنع طباعة أي مبررات أو لغات غريبة
+    system_instructions = (
+        "You are the MACMS Assistant. "
+        "Rule 1: Respond directly in the EXACT SAME language as the user input (Arabic for Arabic, English for English). "
+        "Rule 2: Do NOT output internal thoughts, reasoning notes, or any Chinese text. "
+        "Rule 3: Output ONLY the final response to the user.\n\n"
+    )
+
+    full_prompt = system_instructions + base_prompt
+
+    payload = {
+        "model": "qwen2.5:7b",
+        "prompt": full_prompt,
+        "stream": False,
+        "options": {
+            "num_predict": 100,
+            "num_ctx": 1024,
+            "temperature": 0.1,  # درجة حرارة منخفضة تمنع الهلوسة وتسريب تفكير الموديل
+            "top_k": 20
         }
+    }
 
-        # إرسال الطلب لخادم Ollama
-        # استبدل السطر الحالي بهذا السطر (زيادة التايم أوت إلى 120 ثانية)
-        response = requests.post("http://localhost:11434/api/chat", json=payload, timeout=120)
+    try:
+        response = requests.post(
+            "http://127.0.0.1:11434/api/generate",
+            json=payload,
+            timeout=120
+        )
+        response.raise_for_status()
+        result = response.json()
+        bot_response = result.get("response", "").strip()
 
-        if response.status_code == 200:
-            result = response.json()
-            bot_reply = result.get("message", {}).get("content", "No response generated.")
-            return jsonify({"response": bot_reply, "reply": bot_reply})
-        else:
-            print(f"[❌ Ollama Error]: Code {response.status_code} - {response.text}")
-            return jsonify({"response": "❌ I couldn't connect to the MACMS server.", "reply": "❌ I couldn't connect to the MACMS server."}), 500
+        return jsonify({"response": bot_response})
 
     except requests.exceptions.ConnectionError:
-        print("[❌ Error]: Ollama is not running at http://localhost:11434")
-        return jsonify({"response": "❌ I couldn't connect to the MACMS server. Make sure Ollama is running.", "reply": "❌ I couldn't connect to the MACMS server."}), 500
+        return jsonify({"response": "❌ Could not connect to Ollama. Make sure Ollama is running."}), 500
     except Exception as e:
-        print(f"[❌ Exception]: {e}")
-        return jsonify({"response": "❌ An error occurred processing your request.", "reply": "❌ An error occurred."}), 500
+        print("ERROR:", e)
+        return jsonify({"response": "❌ Error generated while processing."}), 500
 
-# --- 3. تشغيل الخادم ---
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+
+# =========================
+# فتح متصفح Chrome تلقائياً
+# =========================
+
+def open_chrome():
+    url = "http://127.0.0.1:5000/"
+    chrome_path = "C:/Program Files/Google/Chrome/Application/chrome.exe %s"
+    try:
+        webbrowser.get(chrome_path).open(url)
+    except Exception:
+        webbrowser.open(url)
+
+
+# =========================
+# تشغيل السيرفر
+# =========================
+
+if __name__ == "__main__":
+    if not os.environ.get("WERKZEUG_RUN_MAIN"):
+        threading.Timer(1.2, open_chrome).start()
+
+    app.run(
+        host="127.0.0.1",
+        port=5000,
+        debug=True
+    )
